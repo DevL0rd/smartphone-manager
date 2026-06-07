@@ -126,22 +126,15 @@ class PhoneWatcher:
         return bool(self._scrcpy_pids(serial))
 
     def _kill_scrcpy(self, serial):
-        """Stop every scrcpy session for this phone. Returns True if any were
-        running (so callers know whether a mirror should be brought back)."""
+        """Immediately SIGKILL every scrcpy session for this phone. No graceful
+        SIGTERM-then-wait — we want the swap to a new transport to be instant.
+        Returns True if any were running (so callers know to relaunch)."""
         pids = self._scrcpy_pids(serial)
         self.scrcpy_procs.pop(serial, None)
         if not pids:
             return False
-        print(f"[scrcpy] Stopping mirror for {serial} (pids {pids})")
+        print(f"[scrcpy] Killing mirror for {serial} (pids {pids})")
         for pid in pids:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline and self._scrcpy_pids(serial):
-            time.sleep(0.2)
-        for pid in self._scrcpy_pids(serial):
             try:
                 os.kill(pid, signal.SIGKILL)
             except ProcessLookupError:
@@ -150,13 +143,10 @@ class PhoneWatcher:
 
     def _launch_scrcpy(self, serial, target=None, name=None):
         """Launch scrcpy for a serial over `target` (a USB serial or ip:port) via
-        scrcpy_launch.py, sharing the unlock + scrcpy_args path. No-op if a
-        session is already running for this phone."""
+        scrcpy_launch.py, sharing the unlock + scrcpy_args path. Callers kill any
+        existing session first, so this always launches."""
         target = target or serial
         name = name or serial
-        if self._scrcpy_running(serial):
-            print(f"[scrcpy] Already running for {name}, not launching another")
-            return
         launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
         print(f"[scrcpy] Launching for {name} over {target}")
         try:
@@ -165,6 +155,45 @@ class PhoneWatcher:
         except FileNotFoundError:
             send_notification("scrcpy Not Found", "Install scrcpy to enable mirroring", "dialog-error", "critical")
             print("[scrcpy] launcher/scrcpy not found.")
+
+    def _ensure_shortcut(self, serial):
+        """Create/refresh a desktop launcher for this phone. It runs the smart
+        (--auto) connect and sets StartupWMClass=scrcpy so KDE groups the mirror
+        window under this icon (clicking the pin focuses it instead of launching
+        a duplicate)."""
+        apps_dir = os.path.expanduser("~/.local/share/applications")
+        desktop_dir = os.path.expanduser("~/Desktop")
+        launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Phone\n"
+            "Comment=Mirror phone — USB if plugged in, else last known WiFi IP\n"
+            f"Exec=/usr/bin/python3 {launcher} --auto {serial}\n"
+            "Icon=smartphone\n"
+            "Terminal=false\n"
+            "StartupWMClass=scrcpy\n"
+            "Categories=Utility;RemoteAccess;\n"
+            "Keywords=phone;android;mirror;scrcpy;screen;\n"
+        )
+        # App-menu copy (pinnable/searchable) + a copy on the Desktop itself
+        for d in (apps_dir, desktop_dir):
+            if not os.path.isdir(d):
+                continue
+            path = os.path.join(d, f"phone-{serial}.desktop")
+            try:
+                if not os.path.exists(path) or open(path).read() != content:
+                    with open(path, "w") as f:
+                        f.write(content)
+                    os.chmod(path, 0o755)
+                    # KDE: mark the Desktop launcher as trusted so it runs without a prompt
+                    if d == desktop_dir:
+                        subprocess.run(["gio", "set", path, "metadata::trusted", "true"], capture_output=True)
+                    else:
+                        subprocess.run(["update-desktop-database", d], capture_output=True)
+                    print(f"[Shortcut] Wrote {path}")
+            except Exception as e:
+                print(f"[Shortcut] failed to write {path}: {e}")
 
     def _wait_until_ready(self, serial, timeout=20):
         """Block until the phone's USB transport is back and responsive.
@@ -214,6 +243,7 @@ class PhoneWatcher:
             return
 
         self.plugged.add(serial)
+        self._ensure_shortcut(serial)
         notify = cfg.get("notify", False)
         if notify:
             send_notification("Phone Connected", f"{name} plugged in over USB", "smartphone")

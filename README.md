@@ -61,8 +61,12 @@ python3 src/scrcpy_launch.py RFCY8112TKV          # usb serial
 python3 src/scrcpy_launch.py --auto RFCY8112TKV   # smart: USB if plugged, else saved last_ip
 ```
 
-The desktop shortcut uses `--auto`: it mirrors over USB when the phone is
-plugged in, and otherwise connects over WiFi using the saved `last_ip`.
+A desktop launcher is **auto-created** at
+`~/.local/share/applications/phone-<serial>.desktop` the first time a phone
+connects. It uses `--auto` (USB if plugged in, else the saved `last_ip` over
+WiFi) and sets `StartupWMClass=scrcpy`, so the mirror window shows the phone
+icon and clicking the pinned launcher focuses the running mirror instead of
+opening a duplicate.
 
 Logs:
 ```bash
@@ -85,8 +89,7 @@ Each phone entry supports:
   with `["--turn-screen-off", "--stay-awake"]` so every phone mirrors with the
   physical screen blanked and the device kept awake. A device's own
   `scrcpy_args` are **appended** to (not a replacement for) the defaults, so you
-  can add per-phone extras like `["--max-size", "1920"]` without losing the
-  baseline.
+  can add per-phone extras without losing the baseline.
 * **`notify`**: Show desktop notifications (default `false`).
 * **`unlock`**: Auto-unlock the phone before scrcpy starts (default `true`,
   but only acts when `lock_pin` is set). Wakes the screen, presses Space to
@@ -142,7 +145,6 @@ Example:
         "RFCY8112TKV": {
             "name": "Galaxy Z Fold",
             "enabled": true,
-            "scrcpy_args": ["--max-size", "1920"],
             "lock_pin": "1234",
             "tether_failover": true
         }
