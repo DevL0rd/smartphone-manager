@@ -7,6 +7,7 @@ import subprocess
 from core.config import load_config, save_config, ensure_device_in_config, CONFIG_FILE
 from core.adb_monitor import AdbMonitor
 from core.network_monitor import NetworkMonitor
+import kdeconnect_notify
 
 # A mirror seen running within this many seconds of a USB unplug is considered
 # "was up at unplug" and gets reconnected over WiFi. Must exceed the adb monitor
@@ -60,6 +61,12 @@ class PhoneWatcher:
         self.net_monitor.start()
         threading.Thread(target=self._mirror_watch, daemon=True).start()
 
+        # Optional KDE Connect notification integration (click a phone
+        # notification on the PC -> open scrcpy + expand the shade in the mirror)
+        if self.config.get("defaults", {}).get("kdeconnect_notify", False):
+            launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
+            kdeconnect_notify.start(launcher)
+
         # Keep daemon alive
         while True:
             time.sleep(1)
@@ -95,9 +102,11 @@ class PhoneWatcher:
         return None
 
     def _scrcpy_pids(self, serial):
-        """PIDs of any scrcpy session targeting this phone (by serial or its LAN
-        IP), regardless of who launched it — ours, the desktop shortcut, or a
-        manual run."""
+        """PIDs of the actual scrcpy *binary* targeting this phone (by serial or
+        its LAN IP), regardless of who launched it. We deliberately do NOT match
+        the `scrcpy_launch.py` wrapper: killing only the scrcpy binary lets the
+        wrapper run its rotation-restore on exit. (Also excludes scrcpy's
+        `adb shell ... scrcpy-server.jar` helper, which dies with the client.)"""
         patterns = [serial]
         ip = self.phone_ip.get(serial)
         if ip:
@@ -112,9 +121,9 @@ class PhoneWatcher:
             if len(parts) < 2:
                 continue
             pid, cmd = parts
-            # Only the scrcpy client / our launcher — not scrcpy's `adb shell ...
-            # scrcpy-server.jar` helper, which dies with the client anyway.
-            is_client = "scrcpy_launch.py" in cmd or re.search(r"(^|/|\s)scrcpy(\s|$)", cmd)
+            if "scrcpy_launch.py" in cmd:
+                continue  # the wrapper — leave it to restore rotation and exit
+            is_client = re.search(r"(^|/|\s)scrcpy(\s|$)", cmd)
             if is_client and any(p in cmd for p in patterns):
                 try:
                     pids.append(int(pid))
@@ -156,26 +165,18 @@ class PhoneWatcher:
             send_notification("scrcpy Not Found", "Install scrcpy to enable mirroring", "dialog-error", "critical")
             print("[scrcpy] launcher/scrcpy not found.")
 
-    def _is_samsung(self, serial):
-        try:
-            mfr = subprocess.run(
-                ["adb", "-s", serial, "shell", "getprop", "ro.product.manufacturer"],
-                capture_output=True, text=True, timeout=10
-            ).stdout.strip().lower()
-            return "samsung" in mfr
-        except Exception:
-            return False
-
-    def _write_desktop(self, serial, suffix, name, comment, exec_extra):
-        """Write one .desktop launcher to the app menu and the Desktop."""
+    def _ensure_shortcut(self, serial):
+        """Create/refresh a single "Phone" desktop launcher (app menu + Desktop)
+        with StartupWMClass=scrcpy so KDE groups the window under the icon. The
+        clone-vs-extended behaviour is driven by the `mode` config setting, not
+        by separate shortcuts."""
         launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
-        extra = (" " + exec_extra) if exec_extra else ""
         content = (
             "[Desktop Entry]\n"
             "Type=Application\n"
-            f"Name={name}\n"
-            f"Comment={comment}\n"
-            f"Exec=/usr/bin/python3 {launcher} --auto {serial}{extra}\n"
+            "Name=Phone\n"
+            "Comment=Mirror phone — USB if plugged in, else last known WiFi IP\n"
+            f"Exec=/usr/bin/python3 {launcher} --auto {serial}\n"
             "Icon=smartphone\n"
             "Terminal=false\n"
             "StartupWMClass=scrcpy\n"
@@ -186,7 +187,15 @@ class PhoneWatcher:
                   os.path.expanduser("~/Desktop")):
             if not os.path.isdir(d):
                 continue
-            path = os.path.join(d, f"phone-{serial}{suffix}.desktop")
+            # Remove the old extended-display variant shortcut if present
+            old = os.path.join(d, f"phone-{serial}-display.desktop")
+            if os.path.exists(old):
+                try:
+                    os.remove(old)
+                    print(f"[Shortcut] Removed {old}")
+                except OSError:
+                    pass
+            path = os.path.join(d, f"phone-{serial}.desktop")
             try:
                 if not os.path.exists(path) or open(path).read() != content:
                     with open(path, "w") as f:
@@ -199,25 +208,6 @@ class PhoneWatcher:
                     print(f"[Shortcut] Wrote {path}")
             except Exception as e:
                 print(f"[Shortcut] failed to write {path}: {e}")
-
-    def _ensure_shortcut(self, serial):
-        """Create/refresh two desktop launchers for this phone, both with
-        StartupWMClass=scrcpy so KDE groups the window under the icon:
-          - "Phone": clone the screen (default mode).
-          - "Phone (DEX)" on Samsung / "Phone (Extend Display)" elsewhere: mirror
-            onto a new virtual display (extended-display / DeX-style)."""
-        # Mode 1 — clone
-        self._write_desktop(
-            serial, "", "Phone",
-            "Mirror phone — USB if plugged in, else last known WiFi IP", "")
-        # Mode 2 — extended display
-        if self._is_samsung(serial):
-            disp_name = "Phone (DEX)"
-        else:
-            disp_name = "Phone (Extend Display)"
-        self._write_desktop(
-            serial, "-display", disp_name,
-            "Open the phone on a separate resizable display", "--display")
 
     def _wait_until_ready(self, serial, timeout=20):
         """Block until the phone's USB transport is back and responsive.

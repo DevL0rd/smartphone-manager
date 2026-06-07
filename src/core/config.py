@@ -15,7 +15,10 @@ DEFAULTS = {
     "tether_failover": False,
     "tether_function": "rndis",
     "last_ip": "",
-    "display_launcher": ""
+    "display_launcher": "",
+    "orientation": "portrait",
+    "mode": "clone",
+    "kdeconnect_notify": False
 }
 
 def load_config():

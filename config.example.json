@@ -11,7 +11,10 @@
         "tether_failover": false,
         "tether_function": "rndis",
         "last_ip": "",
-        "display_launcher": ""
+        "display_launcher": "",
+        "orientation": "portrait",
+        "mode": "clone",
+        "kdeconnect_notify": false
     },
     "devices": {}
 }

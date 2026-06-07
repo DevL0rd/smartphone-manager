@@ -113,6 +113,32 @@ def unlock(target, cfg):
     adb(target, "shell", "input", "text", pin)
     adb(target, "shell", "input", "keyevent", "66")  # KEYCODE_ENTER
 
+def lock_rotation(target, orientation):
+    """Lock the device's auto-rotate to portrait/landscape so apps don't rotate
+    when the phone is physically turned. orientation 'auto' (or unknown) leaves
+    rotation untouched. Returns True if a lock was applied."""
+    rot = {"portrait": "0", "landscape": "1"}.get(orientation)
+    if rot is None:
+        return False
+    try:
+        adb(target, "shell", "settings", "put", "system", "accelerometer_rotation", "0")
+        adb(target, "shell", "settings", "put", "system", "user_rotation", rot)
+        print(f"[rotation] locked to {orientation}")
+        return True
+    except Exception as e:
+        print(f"[rotation] lock failed: {e}")
+        return False
+
+def restore_rotation(target):
+    """Always re-enable auto-rotate (unlock) when the mirror closes. We don't try
+    to remember the previous state — closing simply returns the phone to
+    auto-rotate, which avoids any cross-session save/restore races."""
+    try:
+        adb(target, "shell", "settings", "put", "system", "accelerometer_rotation", "1")
+        print("[rotation] restored (auto-rotate on)")
+    except Exception as e:
+        print(f"[rotation] restore failed: {e}")
+
 def main():
     args = sys.argv[1:]
     # --display is a launcher-level flag (not a scrcpy flag): mirror onto a NEW
@@ -156,6 +182,12 @@ def main():
     cfg = dict(defaults)
     cfg.update(dev)
 
+    # Mode is config-driven (single shortcut): "clone" (default) mirrors the
+    # screen; "extended"/"display"/"dex" uses a new virtual display. The
+    # --display flag is an explicit override.
+    if str(cfg.get("mode", "clone")).lower() in ("extended", "display", "dex"):
+        display_mode = True
+
     try:
         unlock(target, cfg)
     except Exception as e:
@@ -168,20 +200,34 @@ def main():
         if a not in scrcpy_args:
             scrcpy_args.append(a)
 
-    # Extended-display mode: spin up a new virtual display the size of the phone
-    # screen and live-resize it to the window. With no launcher specified the
-    # phone decides what fills it (DeX on Samsung); set "display_launcher" in
-    # config to force a specific launcher app (a home screen without DeX).
+    locked = False
     if display_mode:
+        # Extended-display mode: spin up a new virtual display the size of the
+        # phone screen and live-resize it to the window. With no launcher
+        # specified the phone decides what fills it (DeX on Samsung); set
+        # "display_launcher" in config to force a specific launcher app.
         scrcpy_args = ["--new-display", "--flex-display"] + scrcpy_args
         launcher_app = str(cfg.get("display_launcher", "") or "")
         if launcher_app:
             scrcpy_args.append(f"--start-app={launcher_app}")
+    else:
+        # Clone mode: lock the phone's auto-rotate so physically rotating it
+        # doesn't make apps rotate in the mirror. Restored when scrcpy exits.
+        orientation = str(cfg.get("orientation", "portrait") or "portrait").lower()
+        locked = lock_rotation(target, orientation)
 
-    # Hand off to scrcpy, bound to this exact target.
     scrcpy_cmd = ["scrcpy", "-s", target] + list(extra) + scrcpy_args
     print(f"[scrcpy] exec: {' '.join(scrcpy_cmd)}")
-    os.execvp("scrcpy", scrcpy_cmd)
+
+    if not locked:
+        os.execvp("scrcpy", scrcpy_cmd)  # nothing to restore → replace process
+    else:
+        # Wait for scrcpy so we can restore the rotation setting afterwards.
+        try:
+            subprocess.run(scrcpy_cmd)
+        finally:
+            restore_rotation(target)
+        return 0
 
 if __name__ == "__main__":
     sys.exit(main())
