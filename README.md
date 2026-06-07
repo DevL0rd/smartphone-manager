@@ -1,4 +1,4 @@
-# Smartphone Manager
+# Linux-Android-Daemon
 
 A small daemon that watches for an Android phone being plugged in over USB. The
 moment one connects it:
