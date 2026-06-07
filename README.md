@@ -11,6 +11,11 @@ moment one connects it:
 It can also **auto-unlock** the phone (type your PIN over adb) on every scrcpy
 launch — both the USB plug-in above and the WiFi desktop shortcut.
 
+The **mirror follows the connection**: plugging in over USB takes over any
+running scrcpy (even one launched outside this tool, like the WiFi shortcut) and
+re-mirrors over the faster cable; unplugging hands the mirror back to WiFi using
+the phone's LAN IP captured while it was plugged in.
+
 And it does **USB-tethering failover**: if the PC has no real wifi/ethernet
 uplink, the plugged-in phone is switched into USB tethering so the PC gets
 internet over the cable; when wifi/ethernet comes back, tethering is turned off
