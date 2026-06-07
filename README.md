@@ -11,6 +11,11 @@ moment one connects it:
 It can also **auto-unlock** the phone (type your PIN over adb) on every scrcpy
 launch — both the USB plug-in above and the WiFi desktop shortcut.
 
+And it does **USB-tethering failover**: if the PC has no real wifi/ethernet
+uplink, the plugged-in phone is switched into USB tethering so the PC gets
+internet over the cable; when wifi/ethernet comes back, tethering is turned off
+again. Only one uplink is ever active at a time.
+
 This pairs nicely with a WiFi scrcpy shortcut: plug in once to "arm" wireless
 adb, then mirror over WiFi later with the cable unplugged.
 
@@ -78,6 +83,28 @@ Each phone entry supports:
 * **`lock_swipe`**: `[startX, startY, endX, endY]` swipe used to reveal the PIN
   bouncer. Defaults to a centered swipe-up for 1080-wide; adjust for foldables /
   other resolutions if needed.
+* **`tether_failover`**: When `true`, if the PC loses its wifi/ethernet uplink
+  this phone is switched into USB tethering so the PC keeps internet over the
+  cable; tethering is turned off again when a real uplink returns (default
+  `false`).
+* **`tether_function`**: USB function used for tethering — `rndis` (default) or
+  `ncm`.
+
+## USB-tethering failover
+With `tether_failover` enabled, a background monitor watches NetworkManager:
+
+* **No real uplink + phone plugged in** → `svc usb setFunctions rndis`, the PC
+  gets internet over USB.
+* **Real uplink returns** → tethering is disabled, traffic goes back over
+  wifi/ethernet.
+
+Only one uplink is ever active at a time, so there's no route-priority guessing.
+
+Switching the USB function **re-enumerates** the USB device, which would drop a
+USB-bound scrcpy session. So if scrcpy is running when a switch happens, the
+daemon **stops it cleanly, performs the switch, waits for the device to come
+back, and relaunches it** — the mirror briefly blips (a few seconds) but returns
+on its own. Manually closed scrcpy windows are not relaunched.
 
 The `defaults` block at the top of the file seeds every newly-discovered phone.
 
@@ -93,14 +120,17 @@ Example:
         "notify": false,
         "unlock": true,
         "lock_pin": "",
-        "lock_swipe": [540, 1800, 540, 600]
+        "lock_swipe": [540, 1800, 540, 600],
+        "tether_failover": false,
+        "tether_function": "rndis"
     },
     "devices": {
         "RFCY8112TKV": {
             "name": "Galaxy Z Fold",
             "enabled": true,
             "scrcpy_args": ["--stay-awake"],
-            "lock_pin": "1234"
+            "lock_pin": "1234",
+            "tether_failover": true
         }
     }
 }

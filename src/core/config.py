@@ -12,7 +12,9 @@ DEFAULTS = {
     "notify": False,
     "unlock": True,
     "lock_pin": "",
-    "lock_swipe": [540, 1800, 540, 600]
+    "lock_swipe": [540, 1800, 540, 600],
+    "tether_failover": False,
+    "tether_function": "rndis"
 }
 
 def load_config():
