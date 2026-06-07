@@ -35,6 +35,29 @@ class PhoneWatcher:
         while True:
             time.sleep(1)
 
+    def _wait_until_ready(self, serial, timeout=20):
+        """Block until the phone's USB transport is back and responsive.
+
+        After `adb tcpip` restarts adbd, the transport flaps; `wait-for-device`
+        can return on the stale connection. Polling `adb shell true` over the
+        USB serial confirms the device is genuinely ready for scrcpy.
+        """
+        # Give adbd a moment to actually tear down the old connection first
+        time.sleep(1.5)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                result = subprocess.run(
+                    ["adb", "-s", serial, "shell", "true"],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0:
+                    return True
+            except subprocess.TimeoutExpired:
+                pass
+            time.sleep(0.5)
+        return False
+
     def _reload_config_if_changed(self):
         if os.path.exists(CONFIG_FILE):
             current_mtime = os.path.getmtime(CONFIG_FILE)
@@ -67,11 +90,15 @@ class PhoneWatcher:
             print(f"[ADB] Enabling wireless adb on {name} (port {port})")
             try:
                 subprocess.run(["adb", "-s", serial, "tcpip", port], timeout=15)
-                # adbd restarts; wait for the USB transport to come back before scrcpy
-                subprocess.run(["adb", "-s", serial, "wait-for-device"], timeout=15)
-                send_notification("Wireless ADB Enabled", f"{name} is now reachable on port {port}", "network-wireless")
             except subprocess.TimeoutExpired:
-                print("[ADB] tcpip/wait-for-device timed out, continuing anyway")
+                print("[ADB] tcpip timed out, continuing anyway")
+            # `adb tcpip` restarts adbd on the phone, so the USB transport drops
+            # and comes back. Wait until it's actually responsive again before
+            # launching scrcpy, otherwise scrcpy connects mid-restart and fails.
+            if self._wait_until_ready(serial):
+                send_notification("Wireless ADB Enabled", f"{name} is now reachable on port {port}", "network-wireless")
+            else:
+                print("[ADB] device did not become ready in time after tcpip")
 
         # 2. Launch scrcpy immediately over USB (targeted by serial)
         if cfg.get("launch_scrcpy", True):
