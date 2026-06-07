@@ -14,7 +14,8 @@ DEFAULTS = {
     "lock_pin": "",
     "tether_failover": False,
     "tether_function": "rndis",
-    "last_ip": ""
+    "last_ip": "",
+    "display_launcher": ""
 }
 
 def load_config():

@@ -156,44 +156,68 @@ class PhoneWatcher:
             send_notification("scrcpy Not Found", "Install scrcpy to enable mirroring", "dialog-error", "critical")
             print("[scrcpy] launcher/scrcpy not found.")
 
-    def _ensure_shortcut(self, serial):
-        """Create/refresh a desktop launcher for this phone. It runs the smart
-        (--auto) connect and sets StartupWMClass=scrcpy so KDE groups the mirror
-        window under this icon (clicking the pin focuses it instead of launching
-        a duplicate)."""
-        apps_dir = os.path.expanduser("~/.local/share/applications")
-        desktop_dir = os.path.expanduser("~/Desktop")
+    def _is_samsung(self, serial):
+        try:
+            mfr = subprocess.run(
+                ["adb", "-s", serial, "shell", "getprop", "ro.product.manufacturer"],
+                capture_output=True, text=True, timeout=10
+            ).stdout.strip().lower()
+            return "samsung" in mfr
+        except Exception:
+            return False
+
+    def _write_desktop(self, serial, suffix, name, comment, exec_extra):
+        """Write one .desktop launcher to the app menu and the Desktop."""
         launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
+        extra = (" " + exec_extra) if exec_extra else ""
         content = (
             "[Desktop Entry]\n"
             "Type=Application\n"
-            "Name=Phone\n"
-            "Comment=Mirror phone — USB if plugged in, else last known WiFi IP\n"
-            f"Exec=/usr/bin/python3 {launcher} --auto {serial}\n"
+            f"Name={name}\n"
+            f"Comment={comment}\n"
+            f"Exec=/usr/bin/python3 {launcher} --auto {serial}{extra}\n"
             "Icon=smartphone\n"
             "Terminal=false\n"
             "StartupWMClass=scrcpy\n"
             "Categories=Utility;RemoteAccess;\n"
             "Keywords=phone;android;mirror;scrcpy;screen;\n"
         )
-        # App-menu copy (pinnable/searchable) + a copy on the Desktop itself
-        for d in (apps_dir, desktop_dir):
+        for d in (os.path.expanduser("~/.local/share/applications"),
+                  os.path.expanduser("~/Desktop")):
             if not os.path.isdir(d):
                 continue
-            path = os.path.join(d, f"phone-{serial}.desktop")
+            path = os.path.join(d, f"phone-{serial}{suffix}.desktop")
             try:
                 if not os.path.exists(path) or open(path).read() != content:
                     with open(path, "w") as f:
                         f.write(content)
                     os.chmod(path, 0o755)
-                    # KDE: mark the Desktop launcher as trusted so it runs without a prompt
-                    if d == desktop_dir:
+                    if d.endswith("Desktop"):
                         subprocess.run(["gio", "set", path, "metadata::trusted", "true"], capture_output=True)
                     else:
                         subprocess.run(["update-desktop-database", d], capture_output=True)
                     print(f"[Shortcut] Wrote {path}")
             except Exception as e:
                 print(f"[Shortcut] failed to write {path}: {e}")
+
+    def _ensure_shortcut(self, serial):
+        """Create/refresh two desktop launchers for this phone, both with
+        StartupWMClass=scrcpy so KDE groups the window under the icon:
+          - "Phone": clone the screen (default mode).
+          - "Phone (DEX)" on Samsung / "Phone (Extend Display)" elsewhere: mirror
+            onto a new virtual display (extended-display / DeX-style)."""
+        # Mode 1 — clone
+        self._write_desktop(
+            serial, "", "Phone",
+            "Mirror phone — USB if plugged in, else last known WiFi IP", "")
+        # Mode 2 — extended display
+        if self._is_samsung(serial):
+            disp_name = "Phone (DEX)"
+        else:
+            disp_name = "Phone (Extend Display)"
+        self._write_desktop(
+            serial, "-display", disp_name,
+            "Open the phone on a separate resizable display", "--display")
 
     def _wait_until_ready(self, serial, timeout=20):
         """Block until the phone's USB transport is back and responsive.

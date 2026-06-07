@@ -61,12 +61,21 @@ python3 src/scrcpy_launch.py RFCY8112TKV          # usb serial
 python3 src/scrcpy_launch.py --auto RFCY8112TKV   # smart: USB if plugged, else saved last_ip
 ```
 
-A desktop launcher is **auto-created** at
-`~/.local/share/applications/phone-<serial>.desktop` the first time a phone
-connects. It uses `--auto` (USB if plugged in, else the saved `last_ip` over
-WiFi) and sets `StartupWMClass=scrcpy`, so the mirror window shows the phone
-icon and clicking the pinned launcher focuses the running mirror instead of
-opening a duplicate.
+**Two** desktop launchers are **auto-created** (app menu + Desktop) the first
+time a phone connects, both using `--auto` (USB if plugged in, else the saved
+`last_ip` over WiFi) and `StartupWMClass=scrcpy` (so the window shows the phone
+icon and the pinned icon focuses the running mirror instead of duplicating):
+
+1. **Phone** — clone mode: mirror the phone's screen. This is the default.
+2. **Phone (DEX)** on Samsung / **Phone (Extend Display)** elsewhere — extended
+   mode: `--new-display --flex-display`, i.e. a *separate* resizable display the
+   size of the phone screen. With no launcher set, the phone decides what fills
+   it (DeX on Samsung, when desktop mode is enabled on the phone). Set
+   `display_launcher` to force a specific launcher app instead (a home screen
+   without DeX, e.g. an open-source launcher).
+
+You can also invoke the modes by hand: append `--display` to the launcher for
+extended mode.
 
 Logs:
 ```bash
@@ -106,6 +115,14 @@ Each phone entry supports:
 * **`last_ip`**: The phone's LAN IP, **auto-updated on every USB connect** so it's
   remembered across daemon/PC reboots. Used by the WiFi fallback and the
   smart-connect shortcut. You don't normally set this by hand.
+* **`display_launcher`**: Optional. For the extended-display ("Phone (DEX)" /
+  "Phone (Extend Display)") mode, the package name of a launcher to run as the
+  home on the virtual display (e.g. `org.fossify.home`). Empty = let the phone
+  decide (DeX on Samsung). Use this to get a home screen without DeX.
+* **`dex_desktop_mode`**: When `true` on a Samsung phone, the daemon sets
+  `force_desktop_mode_on_external_displays=1` on connect so the extended-display
+  shortcut actually shows **DeX**. ⚠️ This is a global phone setting — it also
+  makes *real* external monitors come up in DeX. Default `false`.
 
 ## USB-tethering failover
 With `tether_failover` enabled, a background monitor watches NetworkManager:

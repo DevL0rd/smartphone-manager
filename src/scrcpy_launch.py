@@ -115,8 +115,12 @@ def unlock(target, cfg):
 
 def main():
     args = sys.argv[1:]
+    # --display is a launcher-level flag (not a scrcpy flag): mirror onto a NEW
+    # virtual display (extended-display / DeX-style) instead of cloning the screen.
+    display_mode = "--display" in args
+    args = [a for a in args if a != "--display"]
     if not args:
-        print("usage: scrcpy_launch.py <adb-target>|--auto [serial] [extra scrcpy args...]")
+        print("usage: scrcpy_launch.py <adb-target>|--auto [serial] [--display] [extra scrcpy args...]")
         return 1
 
     config = load_config()
@@ -164,8 +168,19 @@ def main():
         if a not in scrcpy_args:
             scrcpy_args.append(a)
 
+    # Extended-display mode: spin up a new virtual display the size of the phone
+    # screen and live-resize it to the window. With no launcher specified the
+    # phone decides what fills it (DeX on Samsung); set "display_launcher" in
+    # config to force a specific launcher app (a home screen without DeX).
+    if display_mode:
+        scrcpy_args = ["--new-display", "--flex-display"] + scrcpy_args
+        launcher_app = str(cfg.get("display_launcher", "") or "")
+        if launcher_app:
+            scrcpy_args.append(f"--start-app={launcher_app}")
+
     # Hand off to scrcpy, bound to this exact target.
     scrcpy_cmd = ["scrcpy", "-s", target] + list(extra) + scrcpy_args
+    print(f"[scrcpy] exec: {' '.join(scrcpy_cmd)}")
     os.execvp("scrcpy", scrcpy_cmd)
 
 if __name__ == "__main__":
