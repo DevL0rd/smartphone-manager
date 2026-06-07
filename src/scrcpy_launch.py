@@ -105,10 +105,9 @@ def unlock(target, cfg):
     if not is_locked(target):
         return  # already unlocked / no keyguard, don't type into a focused field
 
-    # Swipe up to reveal the PIN bouncer (coords overridable for foldables)
-    sx, sy, ex, ey = cfg.get("lock_swipe", [540, 1800, 540, 600])
-    adb(target, "shell", "input", "swipe", str(sx), str(sy), str(ex), str(ey), "120")
-    time.sleep(0.6)
+    # Press SPACE to bring up the PIN entry (no swipe needed)
+    adb(target, "shell", "input", "keyevent", "62")  # KEYCODE_SPACE
+    time.sleep(0.5)
 
     # Enter the PIN / password and submit
     adb(target, "shell", "input", "text", pin)

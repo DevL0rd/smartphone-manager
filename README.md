@@ -85,13 +85,11 @@ Each phone entry supports:
   `["--turn-screen-off", "--stay-awake"]` or `["--max-size", "1920"]`.
 * **`notify`**: Show desktop notifications (default `false`).
 * **`unlock`**: Auto-unlock the phone before scrcpy starts (default `true`,
-  but only acts when `lock_pin` is set).
+  but only acts when `lock_pin` is set). Wakes the screen, presses Space to
+  bring up the PIN pad, types the PIN, and hits Enter.
 * **`lock_pin`**: Your numeric PIN / password. Left blank by default so nothing
   is typed. The file is git-ignored, so this stays local. PIN/password only —
   pattern locks aren't supported.
-* **`lock_swipe`**: `[startX, startY, endX, endY]` swipe used to reveal the PIN
-  bouncer. Defaults to a centered swipe-up for 1080-wide; adjust for foldables /
-  other resolutions if needed.
 * **`tether_failover`**: When `true`, if the PC loses its wifi/ethernet uplink
   this phone is switched into USB tethering so the PC keeps internet over the
   cable; tethering is turned off again when a real uplink returns (default
