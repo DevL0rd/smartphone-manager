@@ -1,0 +1,19 @@
+{
+    "defaults": {
+        "enabled": true,
+        "enable_tcpip": true,
+        "tcpip_port": 5555,
+        "launch_scrcpy": true,
+        "scrcpy_args": []
+    },
+    "devices": {
+        "RFCY8112TKV": {
+            "enabled": true,
+            "enable_tcpip": true,
+            "tcpip_port": 5555,
+            "launch_scrcpy": true,
+            "scrcpy_args": [],
+            "name": "SM F966B"
+        }
+    }
+}
