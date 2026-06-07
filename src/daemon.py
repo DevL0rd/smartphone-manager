@@ -38,6 +38,12 @@ class PhoneWatcher:
         self.phone_ip = {}            # serial -> last known LAN IP (for WiFi fallback)
         self.mirror_last_seen = {}    # serial -> monotonic time scrcpy was last seen up
 
+        # Seed last-known IPs from config so a fresh daemon (e.g. after reboot)
+        # already knows where to reach each phone over WiFi.
+        for serial, dev in self.config.get("devices", {}).items():
+            if dev.get("last_ip"):
+                self.phone_ip[serial] = dev["last_ip"]
+
         # Tethering / network-failover state
         self.plugged = set()          # USB serials currently plugged in
         self.wifi_online = True       # does the PC have a real (non-phone) uplink?
@@ -212,11 +218,17 @@ class PhoneWatcher:
         if notify:
             send_notification("Phone Connected", f"{name} plugged in over USB", "smartphone")
 
-        # Remember the LAN IP so we can move scrcpy to WiFi when unplugged
+        # Remember the LAN IP so we can move scrcpy to WiFi when unplugged, and
+        # persist it to config so it survives a daemon/PC reboot.
         ip = self._get_phone_ip(serial)
         if ip:
             self.phone_ip[serial] = ip
             print(f"[Net] {name} LAN IP: {ip}")
+            if self.config["devices"][serial].get("last_ip") != ip:
+                self.config["devices"][serial]["last_ip"] = ip
+                save_config(self.config)
+                self.last_config_mtime = os.path.getmtime(CONFIG_FILE)
+                print(f"[Config] Saved last_ip={ip} for {name}")
 
         # 1. Re-enable wireless ADB on this phone (survives until it reboots)
         if cfg.get("enable_tcpip", True):

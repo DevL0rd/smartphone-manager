@@ -52,13 +52,17 @@ appears it runs the connect routine; network (WiFi) transports are ignored. A
 short grace period covers the brief adbd restart caused by `adb tcpip`, so that
 blip is not mistaken for an unplug/replug loop.
 
-Every scrcpy launch (the daemon and the WiFi shortcut) goes through
+Every scrcpy launch (the daemon and the desktop shortcut) goes through
 `src/scrcpy_launch.py`, which optionally unlocks the phone and then starts
 scrcpy. You can also run it by hand:
 ```bash
 python3 src/scrcpy_launch.py 192.168.50.3:5555   # network target
 python3 src/scrcpy_launch.py RFCY8112TKV          # usb serial
+python3 src/scrcpy_launch.py --auto RFCY8112TKV   # smart: USB if plugged, else saved last_ip
 ```
+
+The desktop shortcut uses `--auto`: it mirrors over USB when the phone is
+plugged in, and otherwise connects over WiFi using the saved `last_ip`.
 
 Logs:
 ```bash
@@ -94,6 +98,9 @@ Each phone entry supports:
   `false`).
 * **`tether_function`**: USB function used for tethering — `rndis` (default) or
   `ncm`.
+* **`last_ip`**: The phone's LAN IP, **auto-updated on every USB connect** so it's
+  remembered across daemon/PC reboots. Used by the WiFi fallback and the
+  smart-connect shortcut. You don't normally set this by hand.
 
 ## USB-tethering failover
 With `tether_failover` enabled, a background monitor watches NetworkManager:

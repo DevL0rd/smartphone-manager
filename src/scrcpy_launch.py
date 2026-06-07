@@ -11,6 +11,10 @@ Usage:
     scrcpy_launch.py <adb-target> [extra scrcpy args...]
     e.g. scrcpy_launch.py RFCY8112TKV
          scrcpy_launch.py 192.168.50.3:5555 --turn-screen-off
+
+    scrcpy_launch.py --auto [serial] [extra scrcpy args...]
+        Pick the transport automatically: use USB if the phone is plugged in,
+        otherwise fall back to its saved last_ip from config (over WiFi).
 """
 import os
 import sys
@@ -53,6 +57,34 @@ def get_serial(target):
         pass
     return target
 
+def usb_present(serial):
+    """True if `serial` is connected on a USB transport in 'device' state."""
+    try:
+        out = adb(None, "devices", "-l", capture=True, timeout=10).stdout
+    except Exception:
+        return False
+    for line in out.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == serial and parts[1] == "device" and "usb:" in line:
+            return True
+    return False
+
+def resolve_auto_target(serial, config):
+    """Choose the best transport for a phone: USB if plugged in, else the saved
+    last_ip over WiFi."""
+    if serial and usb_present(serial):
+        print(f"[auto] {serial} is on USB — using the cable")
+        return serial
+    cfg = dict(config.get("defaults", {}))
+    cfg.update(config.get("devices", {}).get(serial, {}))
+    ip = cfg.get("last_ip")
+    if ip:
+        target = f"{ip}:{cfg.get('tcpip_port', 5555)}"
+        print(f"[auto] {serial} not on USB — trying last known WiFi address {target}")
+        return target
+    print(f"[auto] No USB and no saved last_ip for {serial}; trying serial anyway")
+    return serial
+
 def is_locked(target):
     try:
         out = adb(target, "shell", "dumpsys", "window", capture=True, timeout=10).stdout
@@ -85,11 +117,28 @@ def unlock(target, cfg):
 def main():
     args = sys.argv[1:]
     if not args:
-        print("usage: scrcpy_launch.py <adb-target> [extra scrcpy args...]")
+        print("usage: scrcpy_launch.py <adb-target>|--auto [serial] [extra scrcpy args...]")
         return 1
 
-    target = args[0]
-    extra = args[1:]
+    config = load_config()
+
+    if args[0] == "--auto":
+        rest = args[1:]
+        # Optional explicit serial; otherwise use the single configured device
+        serial = None
+        if rest and not rest[0].startswith("-"):
+            serial, rest = rest[0], rest[1:]
+        if not serial:
+            devices = list(config.get("devices", {}).keys())
+            serial = devices[0] if devices else None
+        if not serial:
+            print("[auto] No serial given and no devices in config.json")
+            return 1
+        target = resolve_auto_target(serial, config)
+        extra = rest
+    else:
+        target = args[0]
+        extra = args[1:]
 
     # Network targets need an explicit connect before anything else
     if ":" in target:
@@ -98,7 +147,6 @@ def main():
         except Exception:
             pass
 
-    config = load_config()
     serial = get_serial(target)
     cfg = dict(config.get("defaults", {}))
     cfg.update(config.get("devices", {}).get(serial, {}))
