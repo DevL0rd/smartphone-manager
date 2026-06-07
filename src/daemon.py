@@ -17,7 +17,7 @@ def send_notification(title, message, icon="smartphone", urgency="normal"):
     try:
         subprocess.run([
             "notify-send",
-            "-a", "Smartphone Manager",
+            "-a", "Linux-Android-Daemon",
             "-i", icon,
             "-u", urgency,
             title,
@@ -52,7 +52,7 @@ class PhoneWatcher:
         self.tether_lock = threading.Lock()
 
     def start(self):
-        print("Starting Smartphone Manager...")
+        print("Starting Linux-Android-Daemon...")
         print("Waiting for a phone to be plugged in over USB.")
         self.wifi_online = self.net_monitor.has_real_uplink()
         print(f"[Net] Real uplink present at startup: {self.wifi_online}")

@@ -25,9 +25,9 @@ fi
 echo "Setting up systemd user service..."
 mkdir -p ~/.config/systemd/user
 
-cat <<EOF > ~/.config/systemd/user/smartphone-manager.service
+cat <<EOF > ~/.config/systemd/user/linux-android-daemon.service
 [Unit]
-Description=Smartphone Manager (wireless ADB + scrcpy + USB tethering failover)
+Description=Linux-Android-Daemon (wireless ADB + scrcpy + USB tethering failover)
 After=graphical-session.target
 
 [Service]
@@ -44,10 +44,10 @@ WantedBy=default.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable --now smartphone-manager.service
+systemctl --user enable --now linux-android-daemon.service
 
 echo ""
-echo "Done! The manager is now running in the background."
+echo "Done! The daemon is now running in the background."
 echo "Plug in your phone over USB: it will enable wireless adb and launch scrcpy."
 echo "Edit config.json to tweak per-phone behavior (scrcpy args, tcpip port, etc.)."
-echo "Logs: journalctl --user -u smartphone-manager.service -f"
+echo "Logs: journalctl --user -u linux-android-daemon.service -f"

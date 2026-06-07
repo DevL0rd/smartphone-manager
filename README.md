@@ -70,7 +70,7 @@ opening a duplicate.
 
 Logs:
 ```bash
-journalctl --user -u scrcpy-autolaunch.service -f
+journalctl --user -u linux-android-daemon.service -f
 ```
 
 ## Configuration (`config.json`)
