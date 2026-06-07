@@ -8,7 +8,7 @@ def send_notification(title, message, icon="smartphone", urgency="normal"):
     try:
         subprocess.run([
             "notify-send",
-            "-a", "scrcpy Autolaunch",
+            "-a", "Smartphone Manager",
             "-i", icon,
             "-u", urgency,
             title,
@@ -27,7 +27,7 @@ class PhoneWatcher:
         self.scrcpy_procs = {}
 
     def start(self):
-        print("Starting scrcpy Autolaunch...")
+        print("Starting Smartphone Manager...")
         print("Waiting for a phone to be plugged in over USB.")
         self.adb_monitor.start()
 
@@ -82,7 +82,9 @@ class PhoneWatcher:
             print(f"[Skip] {name} is disabled in config.json")
             return
 
-        send_notification("Phone Connected", f"{name} plugged in over USB", "smartphone")
+        notify = cfg.get("notify", False)
+        if notify:
+            send_notification("Phone Connected", f"{name} plugged in over USB", "smartphone")
 
         # 1. Re-enable wireless ADB on this phone (survives until it reboots)
         if cfg.get("enable_tcpip", True):
@@ -96,23 +98,26 @@ class PhoneWatcher:
             # and comes back. Wait until it's actually responsive again before
             # launching scrcpy, otherwise scrcpy connects mid-restart and fails.
             if self._wait_until_ready(serial):
-                send_notification("Wireless ADB Enabled", f"{name} is now reachable on port {port}", "network-wireless")
+                if notify:
+                    send_notification("Wireless ADB Enabled", f"{name} is now reachable on port {port}", "network-wireless")
             else:
                 print("[ADB] device did not become ready in time after tcpip")
 
-        # 2. Launch scrcpy immediately over USB (targeted by serial)
+        # 2. Launch scrcpy immediately over USB (targeted by serial).
+        # We go through scrcpy_launch.py so the unlock + scrcpy_args behaviour
+        # is shared with the WiFi desktop shortcut.
         if cfg.get("launch_scrcpy", True):
             existing = self.scrcpy_procs.get(serial)
             if existing and existing.poll() is None:
                 print(f"[scrcpy] Already running for {name}, not launching another")
                 return
-            args = ["scrcpy", "-s", serial] + list(cfg.get("scrcpy_args", []))
-            print(f"[scrcpy] Launching over USB: {' '.join(args)}")
+            launcher = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scrcpy_launch.py")
+            print(f"[scrcpy] Launching over USB for {name} ({serial})")
             try:
-                self.scrcpy_procs[serial] = subprocess.Popen(args)
+                self.scrcpy_procs[serial] = subprocess.Popen(["python3", launcher, serial])
             except FileNotFoundError:
                 send_notification("scrcpy Not Found", "Install scrcpy to enable mirroring", "dialog-error", "critical")
-                print("[scrcpy] 'scrcpy' not found in PATH.")
+                print("[scrcpy] launcher/scrcpy not found.")
 
     def on_phone_disconnect(self, serial):
         cfg = self.config.get("devices", {}).get(serial, {})

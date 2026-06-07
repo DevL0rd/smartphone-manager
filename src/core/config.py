@@ -8,7 +8,11 @@ DEFAULTS = {
     "enable_tcpip": True,
     "tcpip_port": 5555,
     "launch_scrcpy": True,
-    "scrcpy_args": []
+    "scrcpy_args": [],
+    "notify": False,
+    "unlock": True,
+    "lock_pin": "",
+    "lock_swipe": [540, 1800, 540, 600]
 }
 
 def load_config():

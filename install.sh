@@ -14,12 +14,20 @@ for bin in adb scrcpy; do
     fi
 done
 
+# Generate the local (git-ignored) config from the template on first install.
+# It holds per-device settings and the optional lock PIN, so it never goes in git.
+if [ ! -f "$REPO_DIR/config.json" ]; then
+    cp "$REPO_DIR/config.example.json" "$REPO_DIR/config.json"
+    echo "Created config.json from config.example.json."
+    echo "  -> To auto-unlock, set \"lock_pin\" in config.json (it is git-ignored)."
+fi
+
 echo "Setting up systemd user service..."
 mkdir -p ~/.config/systemd/user
 
-cat <<EOF > ~/.config/systemd/user/scrcpy-autolaunch.service
+cat <<EOF > ~/.config/systemd/user/smartphone-manager.service
 [Unit]
-Description=scrcpy Autolaunch (Enable wireless ADB + mirror phone on USB plug-in)
+Description=Smartphone Manager (wireless ADB + scrcpy + USB tethering failover)
 After=graphical-session.target
 
 [Service]
@@ -36,10 +44,10 @@ WantedBy=default.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable --now scrcpy-autolaunch.service
+systemctl --user enable --now smartphone-manager.service
 
 echo ""
-echo "Done! The watcher is now running in the background."
+echo "Done! The manager is now running in the background."
 echo "Plug in your phone over USB: it will enable wireless adb and launch scrcpy."
 echo "Edit config.json to tweak per-phone behavior (scrcpy args, tcpip port, etc.)."
-echo "Logs: journalctl --user -u scrcpy-autolaunch.service -f"
+echo "Logs: journalctl --user -u smartphone-manager.service -f"

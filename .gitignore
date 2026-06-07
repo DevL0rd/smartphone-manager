@@ -30,3 +30,7 @@ ENV/
 .idea/
 *.swp
 .DS_Store
+
+# Local config holds secrets (lock PIN) and per-machine device list.
+# Generated from config.example.json by install.sh on first run.
+config.json
