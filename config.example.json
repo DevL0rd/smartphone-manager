@@ -4,7 +4,7 @@
         "enable_tcpip": true,
         "tcpip_port": 5555,
         "launch_scrcpy": true,
-        "scrcpy_args": [],
+        "scrcpy_args": ["--turn-screen-off", "--stay-awake"],
         "notify": false,
         "unlock": true,
         "lock_pin": "",

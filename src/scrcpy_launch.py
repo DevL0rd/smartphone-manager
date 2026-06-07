@@ -147,17 +147,25 @@ def main():
             pass
 
     serial = get_serial(target)
-    cfg = dict(config.get("defaults", {}))
-    cfg.update(config.get("devices", {}).get(serial, {}))
+    defaults = config.get("defaults", {})
+    dev = config.get("devices", {}).get(serial, {})
+    cfg = dict(defaults)
+    cfg.update(dev)
 
     try:
         unlock(target, cfg)
     except Exception as e:
         print(f"[unlock] failed: {e}")
 
-    # Hand off to scrcpy, bound to this exact target. Config scrcpy_args are
-    # applied here so they take effect on every launch path.
-    scrcpy_cmd = ["scrcpy", "-s", target] + list(extra) + list(cfg.get("scrcpy_args", []))
+    # scrcpy_args from defaults are the baseline applied to every phone; a
+    # device's own scrcpy_args are appended on top (not a replacement).
+    scrcpy_args = list(defaults.get("scrcpy_args", []))
+    for a in dev.get("scrcpy_args", []):
+        if a not in scrcpy_args:
+            scrcpy_args.append(a)
+
+    # Hand off to scrcpy, bound to this exact target.
+    scrcpy_cmd = ["scrcpy", "-s", target] + list(extra) + scrcpy_args
     os.execvp("scrcpy", scrcpy_cmd)
 
 if __name__ == "__main__":

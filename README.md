@@ -81,8 +81,12 @@ Each phone entry supports:
 * **`enable_tcpip`**: Run `adb tcpip <port>` on plug-in to re-arm wireless adb.
 * **`tcpip_port`**: Port for wireless adb (default `5555`).
 * **`launch_scrcpy`**: Launch scrcpy over USB on plug-in.
-* **`scrcpy_args`**: Extra arguments passed to scrcpy on every launch, e.g.
-  `["--turn-screen-off", "--stay-awake"]` or `["--max-size", "1920"]`.
+* **`scrcpy_args`**: Arguments passed to scrcpy. The **`defaults`** block ships
+  with `["--turn-screen-off", "--stay-awake"]` so every phone mirrors with the
+  physical screen blanked and the device kept awake. A device's own
+  `scrcpy_args` are **appended** to (not a replacement for) the defaults, so you
+  can add per-phone extras like `["--max-size", "1920"]` without losing the
+  baseline.
 * **`notify`**: Show desktop notifications (default `false`).
 * **`unlock`**: Auto-unlock the phone before scrcpy starts (default `true`,
   but only acts when `lock_pin` is set). Wakes the screen, presses Space to
@@ -126,7 +130,7 @@ Example:
         "enable_tcpip": true,
         "tcpip_port": 5555,
         "launch_scrcpy": true,
-        "scrcpy_args": [],
+        "scrcpy_args": ["--turn-screen-off", "--stay-awake"],
         "notify": false,
         "unlock": true,
         "lock_pin": "",
@@ -138,7 +142,7 @@ Example:
         "RFCY8112TKV": {
             "name": "Galaxy Z Fold",
             "enabled": true,
-            "scrcpy_args": ["--stay-awake"],
+            "scrcpy_args": ["--max-size", "1920"],
             "lock_pin": "1234",
             "tether_failover": true
         }
